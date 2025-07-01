@@ -4,6 +4,7 @@ const express = require("express");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const { default: Stripe } = require("stripe");
+const { data } = require("react-router");
 const app = express();
 
 const port = process.env.PORT || 5000;
@@ -31,6 +32,7 @@ async function run() {
     await client.connect();
     const db = client.db("zap-shift");
     const parcelCollection = db.collection("parcel");
+    const paymentColliction = db.collection("PaymentDB");
     //  get api
 
     app.get("/parcels", async (req, res) => {
@@ -62,6 +64,7 @@ async function run() {
       const result = await parcelCollection.findOne(specefic);
       res.send(result);
     });
+    // payment intent API
     app.post("/create-payment-intent", async (req, res) => {
       const amountIncens = req.body.amountIncens;
       const paymentIntent = await stripe.paymentIntents.create({
@@ -71,6 +74,56 @@ async function run() {
       });
       res.send({ clientSecret: paymentIntent.client_secret });
     });
+
+    // pament get APi
+    app.get("/payment", async (req, res) => {
+      try {
+        const payments = await paymentColliction
+          .find()
+          .sort({ created_At: -1 })
+          .toArray();
+        res.send(payments);
+      } catch (error) {
+        res.status(500).send({ error: error.message });
+      }
+    });
+    //  payment API
+
+    app.post("/payment", async (req, res) => {
+      const {
+        parcelId,
+        userEmail,
+        amount,
+        currency,
+        payment_method,
+        transjctionId,
+      } = req.body;
+
+      const updatedPayment = await parcelCollection.updateOne(
+        { _id: new ObjectId(parcelId) },
+        {
+          $set: {
+            PaymentStatus: "Paid",
+          },
+        }
+      );
+      if (!updatedPayment)
+        return res.status(404).send({ message: "Payment not found" });
+
+      const paymentDoc = {
+        parcelId,
+        userEmail,
+        amount,
+        currency,
+        payment_method,
+        created_At: new Date(),
+        paid_at_string: new Date().toISOString(),
+        transjctionId,
+      };
+      const paymetResult = await paymentColliction.insertOne(paymentDoc);
+      res.send({ insertedId: paymetResult.insertedId });
+    });
+
     // post Api
     app.post("/parcels", async (req, res) => {
       try {
