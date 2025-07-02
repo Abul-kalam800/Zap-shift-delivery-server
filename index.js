@@ -77,11 +77,10 @@ async function run() {
 
     // pament get APi
     app.get("/payment", async (req, res) => {
+      const userEmail = req.query.email;
+
       try {
-        const payments = await paymentColliction
-          .find()
-          .sort({ created_At: -1 })
-          .toArray();
+        const payments = await paymentColliction.find({ userEmail: userEmail }).toArray();
         res.send(payments);
       } catch (error) {
         res.status(500).send({ error: error.message });
