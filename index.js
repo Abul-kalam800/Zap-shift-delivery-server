@@ -1,5 +1,6 @@
 require("dotenv").config();
 const stripe = require("stripe")(process.env.PAYMENT_GATWAY);
+const admin = require("firebase-admin");
 const express = require("express");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
@@ -12,6 +13,15 @@ const port = process.env.PORT || 5000;
 // Middlewares
 app.use(cors());
 app.use(express.json());
+
+
+
+var serviceAccount = require("./firebaseAdminprivetkey.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+
 
 // MongoDB connection
 
@@ -33,9 +43,44 @@ async function run() {
     const db = client.db("zap-shift");
     const parcelCollection = db.collection("parcel");
     const paymentColliction = db.collection("PaymentDB");
+    const userColliction = db.collection("UserDB");
+
     //  get api
 
-    app.get("/parcels", async (req, res) => {
+
+    const veriFayToken =async (req,res,next)=>{
+      const authHeader = req.headers.Authorization
+      console.log(authHeader)
+      if(!authHeader){
+        return res.status(401).send({message:'unauthorization not access'})
+      }
+      const Token = authHeader.split(' ')[1]
+      if(!Token){
+        return res.status(401).send({message:'unauthorization not access'})
+      }
+       try {
+        const decodedToken = await admin.auth().verifyIdToken(Token);
+        req.user = decodedToken;
+        next();
+        
+    } catch (error) {
+        return res.status(403).json({ message: 'Unauthorized', error });
+    }
+
+    }
+
+    app.post("/users", async (req, res) => {
+      const email = req.body.email;
+      const exighits = await userColliction.findOne({email});
+      if (exighits) {
+        return res.status(200).send({ message: "user Already exighets" });
+      }
+      const user = req.body;
+      const result = await userColliction.insertOne(user);
+      res.send(result);
+    });
+
+    app.get("/parcels", async (req,  res) => {
       try {
         const userEamil = req.query.email;
         const query = userEamil
@@ -77,10 +122,14 @@ async function run() {
 
     // pament get APi
     app.get("/payment", async (req, res) => {
+
+      
       const userEmail = req.query.email;
 
       try {
-        const payments = await paymentColliction.find({ userEmail: userEmail }).toArray();
+        const payments = await paymentColliction
+          .find({ userEmail: userEmail })
+          .toArray();
         res.send(payments);
       } catch (error) {
         res.status(500).send({ error: error.message });
@@ -147,6 +196,7 @@ async function run() {
         res.status(500).json({ error: error.message });
       }
     });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
