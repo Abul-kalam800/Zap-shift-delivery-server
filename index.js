@@ -14,14 +14,11 @@ const port = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-
-
 var serviceAccount = require("./firebaseAdminprivetkey.json");
 
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
+  credential: admin.credential.cert(serviceAccount),
 });
-
 
 // MongoDB connection
 
@@ -44,34 +41,32 @@ async function run() {
     const parcelCollection = db.collection("parcel");
     const paymentColliction = db.collection("PaymentDB");
     const userColliction = db.collection("UserDB");
+    const riderCollication = db.collection("Riders");
 
     //  get api
 
-
-    const veriFayToken =async (req,res,next)=>{
-      const authHeader = req.headers.Authorization
-      console.log(authHeader)
-      if(!authHeader){
-        return res.status(401).send({message:'unauthorization not access'})
+    const veriFayToken = async (req, res, next) => {
+      const authHeader = req.headers.Authorization;
+      console.log(authHeader);
+      if (!authHeader) {
+        return res.status(401).send({ message: "unauthorization not access" });
       }
-      const Token = authHeader.split(' ')[1]
-      if(!Token){
-        return res.status(401).send({message:'unauthorization not access'})
+      const token = authHeader.split(" ")[1];
+      if (!token) {
+        return res.status(401).send({ message: "unauthorization not access" });
       }
-       try {
-        const decodedToken = await admin.auth().verifyIdToken(Token);
-        req.user = decodedToken;
+      try {
+        const decodedToken = await admin.auth().verifyIdToken(token);
+        req.decodedToken = decodedToken;
         next();
-        
-    } catch (error) {
-        return res.status(403).json({ message: 'Unauthorized', error });
-    }
-
-    }
+      } catch (error) {
+        return res.status(403).json({ message: "Unauthorized", error });
+      }
+    };
 
     app.post("/users", async (req, res) => {
       const email = req.body.email;
-      const exighits = await userColliction.findOne({email});
+      const exighits = await userColliction.findOne({ email });
       if (exighits) {
         return res.status(200).send({ message: "user Already exighets" });
       }
@@ -80,7 +75,7 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/parcels", async (req,  res) => {
+    app.get("/parcels", async (req, res) => {
       try {
         const userEamil = req.query.email;
         const query = userEamil
@@ -122,8 +117,6 @@ async function run() {
 
     // pament get APi
     app.get("/payment", async (req, res) => {
-
-      
       const userEmail = req.query.email;
 
       try {
@@ -196,6 +189,59 @@ async function run() {
         res.status(500).json({ error: error.message });
       }
     });
+
+    // riders pending api
+    app.get("/pending", async (req, res) => {
+      try {
+        const pendingRiders = await riderCollication
+          .find({ status: "pending" })
+          .toArray();
+        res.status(200).send(pendingRiders);
+      } catch (error) {
+        console.error("Error fetching pending riders:", error);
+        res.status(500).send("Internal Server Error");
+      }
+    });
+
+    // riders post Api
+    app.post("/riders", async (req, res) => {
+      const riders = req.body;
+      const result = await riderCollication.insertOne(riders);
+      res.send(result);
+    });
+    // update status
+    app.patch("/riders/:id/status", async (req, res) => {
+      const riderId = req.params.id;
+      const { status } = req.body;
+      const query = { _id: new ObjectId(riderId) };
+      const updateDoc = {
+        $set: {
+          status,
+        },
+      };
+
+      try {
+        const result = await riderCollication.updateOne(query, updateDoc);
+
+        res.send(result);
+      } catch (error) {
+        console.error("Error updating rider status:", error);
+        res.status(500).send("Internal Server Error.");
+      }
+    });
+
+    // active riders 
+
+    app.get('/riders/active', async (req, res) => {
+  try {
+    const activeRiders = await riderCollication.find({ status: 'Active' }).toArray();
+    res.status(200).send(activeRiders);
+  } catch (error) {
+    console.error('Error fetching active riders:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
