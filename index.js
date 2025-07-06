@@ -64,6 +64,65 @@ async function run() {
       }
     };
 
+    // get user role by
+
+    app.get("/users/role/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        const user = await userColliction.findOne({ email });
+
+        if (!user) return res.status(404).json({ message: "User not found" });
+
+        res.json({ role: user.role });
+      } catch (err) {
+        res.status(500).json({ error: "Server error" });
+      }
+    });
+
+    // admin make api
+    // routes/userRoutes.js
+    app.get("/users/search", async (req, res) => {
+      try {
+        const emailQuery = req.query.email;
+        const regex = new RegExp(emailQuery, "i");
+
+        const users = await userColliction
+          .find({
+            email: { $regex: regex }, // search by email
+          })
+          .limit(10)
+          .toArray();
+
+        res.send(users);
+      } catch (err) {
+        res.status(500).json({ error: "Server error" });
+      }
+    });
+
+    // API to update user role (user <-> admin)
+    app.patch("/users/role", async (req, res) => {
+      try {
+        // const id = req.params.id;
+        // const query = {_id:new ObjectId(id)}
+        const { email, role } = req.body; // role should be 'admin' or 'user'
+
+        // Find the user by email
+        const user = await userColliction.findOne({ email });
+        if (!user) return res.status(404).json({ message: "User not found" });
+
+        // Update the role
+        const updatedUser = await userColliction.findOneAndUpdate(
+          { email: email },
+          { $set: { role: role } },
+          { new: true } // Return the updated document
+        );
+        res.send(updatedUser);
+      } catch (err) {
+        res.status(500).json({ error: "Server error" });
+      }
+    });
+
+    // user post api
     app.post("/users", async (req, res) => {
       const email = req.body.email;
       const exighits = await userColliction.findOne({ email });
@@ -212,7 +271,7 @@ async function run() {
     // update status
     app.patch("/riders/:id/status", async (req, res) => {
       const riderId = req.params.id;
-      const { status } = req.body;
+      const { status, email } = req.body;
       const query = { _id: new ObjectId(riderId) };
       const updateDoc = {
         $set: {
@@ -223,6 +282,22 @@ async function run() {
       try {
         const result = await riderCollication.updateOne(query, updateDoc);
 
+        if (status === "Active") {
+          const userquery = { email };
+          const userUpdate = {
+            $set: {
+              role: "rider",
+            },
+          };
+
+          const userRole = await userColliction.updateOne(
+            userquery,
+            userUpdate
+          );
+          console.log(userRole);
+          console.log(userRole.modifiedCount);
+        }
+
         res.send(result);
       } catch (error) {
         console.error("Error updating rider status:", error);
@@ -230,18 +305,19 @@ async function run() {
       }
     });
 
-    // active riders 
+    // active riders
 
-    app.get('/riders/active', async (req, res) => {
-  try {
-    const activeRiders = await riderCollication.find({ status: 'Active' }).toArray();
-    res.status(200).send(activeRiders);
-  } catch (error) {
-    console.error('Error fetching active riders:', error);
-    res.status(500).send('Internal Server Error');
-  }
-});
-
+    app.get("/riders/active", async (req, res) => {
+      try {
+        const activeRiders = await riderCollication
+          .find({ status: "Active" })
+          .toArray();
+        res.status(200).send(activeRiders);
+      } catch (error) {
+        console.error("Error fetching active riders:", error);
+        res.status(500).send("Internal Server Error");
+      }
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
