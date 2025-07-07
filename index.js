@@ -43,11 +43,10 @@ async function run() {
     const userColliction = db.collection("UserDB");
     const riderCollication = db.collection("Riders");
 
-    
-//  token 
+    //  token
     const veriFayToken = async (req, res, next) => {
       const authHeader = req.headers.authorization;
- 
+
       if (!authHeader) {
         return res.status(401).send({ message: "unauthorization not access" });
       }
@@ -55,29 +54,28 @@ async function run() {
       if (!token) {
         return res.status(401).send({ message: "unauthorization not access" });
       }
-  
+
       // veryfy the token
       try {
         const decoded = await admin.auth().verifyIdToken(token);
         req.decoded = decoded;
-      
+
         next();
       } catch (error) {
-        return res.status(403).send({ message: "Forbidden Access"});
+        return res.status(403).send({ message: "Forbidden Access" });
       }
     };
 
-    // VERYFY ADMIN 
-    const VeryfyAdmin = async(req,res,next)=>{
+    // VERYFY ADMIN
+    const VeryfyAdmin = async (req, res, next) => {
       const email = req.decoded.email;
-      const query={email};
+      const query = { email };
       const user = await userColliction.findOne(query);
-      if(!user || user.role !=="admin"){
-       return res.status(403).send({message:'Forbidden Access'})
+      if (!user || user.role !== "admin") {
+        return res.status(403).send({ message: "Forbidden Access" });
       }
-      next()
-
-    }
+      next();
+    };
 
     // get user role by
 
@@ -95,7 +93,7 @@ async function run() {
     });
 
     // admin make api
-  
+
     app.get("/users/search", async (req, res) => {
       try {
         const emailQuery = req.query.email;
@@ -151,16 +149,22 @@ async function run() {
 
     app.get("/parcels", veriFayToken, async (req, res) => {
       try {
-        const userEamil = req.query.email;
-        const query = userEamil
-          ? {
-              created_by: userEamil,
-            }
-          : {};
+        const { email, PaymentStatus, DelivryStatus } = req.query;
+        const query = {};
+        if (email) {
+          query.created_by= email
+        }
+        if (PaymentStatus) {
+          query.PaymentStatus = PaymentStatus
+        }
+        if (DelivryStatus) {
+          query.DelivryStatus = DelivryStatus
+        }
+
         const options = {
           sort: { createdAt: -1 },
         };
-
+  
         // Match the correct field: created_by_email
         const result = await parcelCollection.find(query, options).toArray();
 
@@ -179,7 +183,7 @@ async function run() {
       res.send(result);
     });
     // payment intent API
-    app.post("/create-payment-intent",  async (req, res) => {
+    app.post("/create-payment-intent", async (req, res) => {
       const amountIncens = req.body.amountIncens;
       const paymentIntent = await stripe.paymentIntents.create({
         amount: amountIncens,
@@ -265,7 +269,7 @@ async function run() {
     });
 
     // riders pending api
-    app.get("/pending", veriFayToken,VeryfyAdmin, async (req, res) => {
+    app.get("/pending", veriFayToken, VeryfyAdmin, async (req, res) => {
       try {
         // const header = req.headers.authorization;
         // const x = header.split(' ')[1]
@@ -326,7 +330,7 @@ async function run() {
 
     // active riders
 
-    app.get("/riders/active",veriFayToken, VeryfyAdmin, async (req, res) => {
+    app.get("/riders/active", veriFayToken, VeryfyAdmin, async (req, res) => {
       try {
         const activeRiders = await riderCollication
           .find({ status: "Active" })
