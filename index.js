@@ -43,11 +43,11 @@ async function run() {
     const userColliction = db.collection("UserDB");
     const riderCollication = db.collection("Riders");
 
-    //  get api
-
+    
+//  token 
     const veriFayToken = async (req, res, next) => {
-      const authHeader = req.headers.Authorization;
-      console.log(authHeader);
+      const authHeader = req.headers.authorization;
+ 
       if (!authHeader) {
         return res.status(401).send({ message: "unauthorization not access" });
       }
@@ -55,14 +55,29 @@ async function run() {
       if (!token) {
         return res.status(401).send({ message: "unauthorization not access" });
       }
+  
+      // veryfy the token
       try {
-        const decodedToken = await admin.auth().verifyIdToken(token);
-        req.decodedToken = decodedToken;
+        const decoded = await admin.auth().verifyIdToken(token);
+        req.decoded = decoded;
+      
         next();
       } catch (error) {
-        return res.status(403).json({ message: "Unauthorized", error });
+        return res.status(403).send({ message: "Forbidden Access"});
       }
     };
+
+    // VERYFY ADMIN 
+    const VeryfyAdmin = async(req,res,next)=>{
+      const email = req.decoded.email;
+      const query={email};
+      const user = await userColliction.findOne(query);
+      if(!user || user.role !=="admin"){
+       return res.status(403).send({message:'Forbidden Access'})
+      }
+      next()
+
+    }
 
     // get user role by
 
@@ -80,7 +95,7 @@ async function run() {
     });
 
     // admin make api
-    // routes/userRoutes.js
+  
     app.get("/users/search", async (req, res) => {
       try {
         const emailQuery = req.query.email;
@@ -134,7 +149,7 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/parcels", async (req, res) => {
+    app.get("/parcels", veriFayToken, async (req, res) => {
       try {
         const userEamil = req.query.email;
         const query = userEamil
@@ -164,7 +179,7 @@ async function run() {
       res.send(result);
     });
     // payment intent API
-    app.post("/create-payment-intent", async (req, res) => {
+    app.post("/create-payment-intent",  async (req, res) => {
       const amountIncens = req.body.amountIncens;
       const paymentIntent = await stripe.paymentIntents.create({
         amount: amountIncens,
@@ -175,7 +190,7 @@ async function run() {
     });
 
     // pament get APi
-    app.get("/payment", async (req, res) => {
+    app.get("/payment", veriFayToken, async (req, res) => {
       const userEmail = req.query.email;
 
       try {
@@ -250,8 +265,12 @@ async function run() {
     });
 
     // riders pending api
-    app.get("/pending", async (req, res) => {
+    app.get("/pending", veriFayToken,VeryfyAdmin, async (req, res) => {
       try {
+        // const header = req.headers.authorization;
+        // const x = header.split(' ')[1]
+        // console.log(x)
+        // console.log(header)
         const pendingRiders = await riderCollication
           .find({ status: "pending" })
           .toArray();
@@ -307,7 +326,7 @@ async function run() {
 
     // active riders
 
-    app.get("/riders/active", async (req, res) => {
+    app.get("/riders/active",veriFayToken, VeryfyAdmin, async (req, res) => {
       try {
         const activeRiders = await riderCollication
           .find({ status: "Active" })
